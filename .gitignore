@@ -1,0 +1,17 @@
+# 密钥 - 绝对不能提交!
+.env
+
+# 依赖
+node_modules/
+__pycache__/
+*.pyc
+
+# 临时文件
+/tmp/
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

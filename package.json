@@ -1,0 +1,15 @@
+{
+  "name": "xhs-hot-tool",
+  "version": "1.0.0",
+  "description": "小红书热门帖子查询 & AI仿写工具",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["xiaohongshu", "social-media", "content-rewrite"],
+  "license": "MIT"
+}

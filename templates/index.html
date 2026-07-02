@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小红书爆款笔记查询 &amp; AI仿写工具</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
+</head>
+<body>
+
+    <!-- 顶部导航 -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">🔥</span>
+                    <span class="logo-text">红书爆款助手</span>
+                </div>
+                <nav class="nav-tabs" id="navTabs">
+                    <button class="nav-tab active" data-tab="search">🔍 搜索发现</button>
+                    <button class="nav-tab" data-tab="hot">📈 热门榜单</button>
+                    <button class="nav-tab" data-tab="rewrite">✍️ AI仿写</button>
+                </nav>
+                <div class="header-status" id="headerStatus">
+                    <span class="status-dot mock"></span>
+                    <span class="status-text">演示模式</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="main container">
+
+        <!-- ======== 搜索面板 ======== -->
+        <section class="panel" id="panel-search">
+            <div class="search-hero">
+                <h1 class="search-title">发现小红书爆款笔记</h1>
+                <p class="search-subtitle">搜索关键词，找到点赞最高、收藏最多的热门内容</p>
+                <div class="search-box">
+                    <div class="search-input-wrapper">
+                        <span class="search-icon">🔍</span>
+                        <input
+                            type="text"
+                            id="searchInput"
+                            class="search-input"
+                            placeholder="输入关键词，如：减脂餐、穿搭技巧、Python学习..."
+                            autocomplete="off"
+                        >
+                        <button class="search-clear" id="searchClear" title="清除">✕</button>
+                    </div>
+                    <div class="search-options">
+                        <select id="sortBy" class="search-select">
+                            <option value="likes">👍 按点赞排序</option>
+                            <option value="collects">⭐ 按收藏排序</option>
+                            <option value="comments">💬 按评论排序</option>
+                            <option value="relevance">🎯 按相关度排序</option>
+                        </select>
+                        <button class="btn btn-primary" id="searchBtn">
+                            <span class="btn-text">搜索</span>
+                            <span class="btn-loading" style="display:none">
+                                <span class="spinner"></span> 搜索中...
+                            </span>
+                        </button>
+                    </div>
+                </div>
+                <!-- 快捷标签 -->
+                <div class="quick-tags">
+                    <span class="quick-tag-label">热门搜索：</span>
+                    <button class="quick-tag" data-keyword="减脂餐">减脂餐</button>
+                    <button class="quick-tag" data-keyword="穿搭技巧">穿搭技巧</button>
+                    <button class="quick-tag" data-keyword="Python学习">Python学习</button>
+                    <button class="quick-tag" data-keyword="办公效率">办公效率</button>
+                    <button class="quick-tag" data-keyword="上海美食">上海美食</button>
+                    <button class="quick-tag" data-keyword="iPhone技巧">iPhone技巧</button>
+                </div>
+            </div>
+
+            <!-- 搜索结果 -->
+            <div class="results-area" id="resultsArea" style="display:none">
+                <div class="results-header">
+                    <h2 class="results-title" id="resultsTitle">搜索结果</h2>
+                    <span class="results-count" id="resultsCount"></span>
+                </div>
+                <div class="posts-grid" id="postsGrid"></div>
+                <div class="results-empty" id="resultsEmpty" style="display:none">
+                    <div class="empty-icon">📭</div>
+                    <p>没有找到相关帖子</p>
+                    <p class="empty-hint">试试其他关键词吧～</p>
+                </div>
+            </div>
+
+            <!-- 加载动画 -->
+            <div class="loading-area" id="loadingArea" style="display:none">
+                <div class="loading-spinner"></div>
+                <p>正在搜索小红书热门内容...</p>
+            </div>
+        </section>
+
+        <!-- ======== 热门榜单面板 ======== -->
+        <section class="panel" id="panel-hot" style="display:none">
+            <div class="hot-header">
+                <h2>📈 热门帖子榜单</h2>
+                <p>当前点赞数最高的爆款笔记</p>
+                <div class="hot-filters">
+                    <select id="hotCategory" class="search-select">
+                        <option value="">全部类别</option>
+                        <option value="减脂">减脂健身</option>
+                        <option value="穿搭">穿搭时尚</option>
+                        <option value="编程">编程学习</option>
+                        <option value="美食">美食探店</option>
+                        <option value="数码">数码科技</option>
+                        <option value="效率">效率工具</option>
+                    </select>
+                    <button class="btn btn-outline" id="hotRefreshBtn">🔄 刷新榜单</button>
+                </div>
+            </div>
+            <div class="posts-grid" id="hotPostsGrid"></div>
+            <div class="loading-area" id="hotLoadingArea" style="display:none">
+                <div class="loading-spinner"></div>
+                <p>加载热门榜单中...</p>
+            </div>
+        </section>
+
+        <!-- ======== AI仿写面板 ======== -->
+        <section class="panel" id="panel-rewrite" style="display:none">
+            <div class="rewrite-header">
+                <h2>✍️ AI爆款笔记仿写</h2>
+                <p>基于热门笔记的风格和结构，自动生成你的原创内容</p>
+            </div>
+            <div class="rewrite-layout">
+                <!-- 左侧：选择原帖 -->
+                <div class="rewrite-side">
+                    <h3>📌 第一步：选择参考帖子</h3>
+                    <div class="rewrite-search-box">
+                        <input type="text" id="rewriteKeyword" class="search-input small"
+                               placeholder="搜索关键词找参考帖子...">
+                        <button class="btn btn-sm btn-primary" id="rewriteSearchBtn">搜索</button>
+                    </div>
+                    <div class="rewrite-post-list" id="rewritePostList">
+                        <div class="rewrite-post-placeholder">
+                            <p>👆 搜索并选择一个热门帖子作为仿写参考</p>
+                            <p class="hint">选中的帖子将被分析风格和结构</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧：仿写结果 -->
+                <div class="rewrite-main">
+                    <h3>📝 第二步：AI仿写生成</h3>
+                    <div class="rewrite-theme-input">
+                        <input type="text" id="customTheme" class="search-input small"
+                               placeholder="可选：指定仿写主题方向（如：换成北京美食）">
+                        <button class="btn btn-primary" id="rewriteBtn" disabled>
+                            🪄 开始仿写
+                        </button>
+                    </div>
+                    <div class="rewrite-result-area" id="rewriteResultArea">
+                        <div class="rewrite-placeholder">
+                            <div class="placeholder-icon">🤖</div>
+                            <p>选择参考帖子后，点击"开始仿写"</p>
+                            <p class="hint">AI将分析爆款笔记的风格并生成新内容</p>
+                        </div>
+                    </div>
+                    <!-- 对比视图 -->
+                    <div class="rewrite-compare" id="rewriteCompare" style="display:none">
+                        <div class="compare-panel">
+                            <h4>📋 原帖内容</h4>
+                            <div class="compare-content" id="compareSource"></div>
+                        </div>
+                        <div class="compare-divider">→</div>
+                        <div class="compare-panel">
+                            <h4>✨ 仿写结果</h4>
+                            <div class="compare-content" id="compareRewritten"></div>
+                            <button class="btn btn-outline btn-sm" id="copyRewritten">📋 一键复制</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ======== 帖子详情弹窗 ======== -->
+    <div class="modal-overlay" id="modalOverlay" style="display:none">
+        <div class="modal" id="modal">
+            <button class="modal-close" id="modalClose">✕</button>
+            <div class="modal-body" id="modalBody"></div>
+        </div>
+    </div>
+
+    <!-- Toast 提示 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
