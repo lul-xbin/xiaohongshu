@@ -313,38 +313,172 @@ def get_mock_detail(note_id):
 # 模板仿写
 # ============================================================
 
-THEME_MAP = {
-    "办公": "学习", "Python": "JavaScript", "编程": "写作",
-    "美食": "旅行", "上海": "北京", "iPhone": "安卓",
-    "减脂": "增肌", "穿搭": "护肤", "手机": "平板",
-    "3年": "2年", "三个月": "两个月", "30天": "21天",
-    "12斤": "8斤", "200": "150", "35": "30", "80": "70",
-    "50": "45", "60": "55", "40": "35", "5个": "6个", "5家": "6家"
-}
+def ai_rewrite(source_post, custom_theme=""):
+    """使用 AI API 进行智能仿写"""
+    if not AI_API_KEY:
+        return None
+
+    title = source_post.get("title", "")
+    content = source_post.get("content", "")
+    tags = source_post.get("tags", [])
+
+    theme_instruction = ""
+    if custom_theme:
+        theme_instruction = f"""
+【重要】用户指定的仿写方向：{custom_theme}
+请严格按照这个方向来改写内容，替换相关的主体、场景、关键词等。
+"""
+
+    prompt = f"""你是一个小红书爆款笔记仿写专家。请分析以下爆款笔记的风格特点，然后仿写一篇全新的原创笔记。
+
+## 原帖信息
+标题：{title}
+标签：{', '.join(tags)}
+内容：
+{content}
+
+{theme_instruction}
+## 仿写要求
+1. 保持原帖的结构、段落格式、emoji使用风格
+2. 保持原帖的叙述口吻（第一人称/教程式/清单式等）
+3. 将内容主题替换为全新的方向{('：' + custom_theme) if custom_theme else '（与原文保持同一领域但内容不同）'}
+4. 生成新的相关标签（3-5个）
+5. 标题也要重新创作，保持吸引眼球的风格
+6. 内容必须原创，不能直接复制原帖
+
+请以JSON格式返回：
+{{
+    "title": "新标题",
+    "content": "新内容",
+    "tags": ["标签1", "标签2", "标签3"],
+    "style_analysis": "风格分析（一句话）"
+}}"""
+
+    try:
+        import urllib.request
+        api_base = AI_API_BASE.rstrip('/') if AI_API_BASE else "https://api.openai.com/v1"
+        url = f"{api_base}/chat/completions"
+
+        body = json.dumps({
+            "model": os.environ.get("AI_MODEL", "gpt-3.5-turbo"),
+            "messages": [
+                {"role": "system", "content": "你是一个小红书爆款笔记仿写专家，擅长分析爆款内容风格并生成原创仿写。请只返回JSON格式的结果。"},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.8,
+            "max_tokens": 2000
+        }).encode("utf-8")
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {AI_API_KEY}"
+        }
+
+        ctx = ssl.create_default_context()
+        req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+
+        with urllib.request.urlopen(req, timeout=60, context=ctx) as resp:
+            raw = resp.read().decode("utf-8")
+            result = json.loads(raw)
+
+        ai_text = result["choices"][0]["message"]["content"].strip()
+
+        # 尝试提取 JSON（处理 AI 可能包裹的 ```json ``` 标记）
+        json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', ai_text)
+        if json_match:
+            ai_text = json_match.group(1).strip()
+
+        ai_result = json.loads(ai_text)
+
+        return {
+            "title": ai_result.get("title", "【仿写】" + title),
+            "content": ai_result.get("content", content),
+            "tags": ai_result.get("tags", tags)[:5],
+            "style_analysis": ai_result.get("style_analysis", ""),
+            "method": "ai_powered"
+        }
+
+    except Exception as e:
+        print(f"  AI仿写失败: {e}")
+        return None
+
 
 def template_rewrite(source_post, custom_theme=""):
+    """
+    模板仿写（AI API 不可用时的回退方案）。
+    当用户指定 custom_theme 时，解析其中的关键词对（如"上海→北京"、"美食→旅行"），
+    并用这些映射替换原文中的关键词。
+    """
     title = source_post.get("title", "")
     content = source_post.get("content", "")
     tags = list(source_post.get("tags", []))
 
-    for old, new in THEME_MAP.items():
+    # --- 构建替换映射 ---
+    replace_map = {}
+
+    # 1. 解析用户自定义主题方向
+    if custom_theme:
+        # 支持多种格式：
+        #   "换成北京美食" → 从上下文中提取
+        #   "上海→北京, 美食→旅行" → 直接解析映射
+        #   "北京" → 作为关键词尝试智能匹配
+        pairs = re.split(r'[,，、\s]+', custom_theme)
+        for pair in pairs:
+            pair = pair.strip()
+            if not pair:
+                continue
+            # 格式: A→B 或 A->B 或 A换成B 或 A改B
+            m = re.match(r'(.+?)\s*[→\->]\s*(.+)', pair)
+            if m:
+                replace_map[m.group(1).strip()] = m.group(2).strip()
+            else:
+                m = re.match(r'(.+?)[换改]\s*(?:成|为|到)\s*(.+)', pair)
+                if m:
+                    replace_map[m.group(1).strip()] = m.group(2).strip()
+
+    # 2. 如果用户没给明确映射，尝试从 custom_theme 中提取有意义的词作为新主题
+    #    并智能替换原文中的核心关键词
+    if not replace_map and custom_theme:
+        # 把 custom_theme 整体作为一个方向提示，替换原文中最核心的关键词
+        core_words = extract_core_keywords(title, content, tags)
+        if core_words and custom_theme:
+            # 用 custom_theme 中的最后一个词或主要词替换原文核心词
+            new_theme_word = custom_theme.strip()
+            # 去掉"换成"、"改成"、"仿写"等前缀
+            new_theme_word = re.sub(r'^.*?[换改仿][成写到]?\s*', '', new_theme_word)
+            if core_words[0] in replace_map:
+                pass  # already mapped
+            # 尝试找到最核心的主题词并替换
+            for cw in core_words[:2]:
+                if cw not in replace_map and len(cw) >= 2:
+                    replace_map[cw] = new_theme_word
+                    break
+
+    # 3. 应用所有替换（用户自定义优先）
+    for old, new in replace_map.items():
         title = title.replace(old, new)
         content = content.replace(old, new)
 
+    # 4. 更新标签
     new_tags = []
     for tag in tags:
         nt = tag
-        for old, new in THEME_MAP.items():
+        for old, new in replace_map.items():
             nt = nt.replace(old, new)
         if nt not in new_tags:
             new_tags.append(nt)
 
-    if title == source_post.get("title", ""):
+    # 如果没有任何变化，标记一下
+    if title == source_post.get("title", "") and not replace_map:
         title = "【仿写】" + title
 
-    has_emoji = bool(re.search(r'[^\w\s一-鿿，。！？、；：「」（）]', content))
+    if custom_theme and replace_map:
+        title = f"【{custom_theme}】" + title if not title.startswith("【") else title
+
+    has_emoji = bool(re.search(r'[^\w\s一-鿿，。！？、；：「」（）\n]', content))
     sections = content.count('\n\n')
-    style = f"风格特点：{'emoji丰富' if has_emoji else '文字为主'}、{'多段落' if sections >= 3 else '紧凑型'}、约{len(content)}字"
+    theme_info = f"、方向: {custom_theme}" if custom_theme else ""
+    style = f"风格特点：{'emoji丰富' if has_emoji else '文字为主'}、{'多段落' if sections >= 3 else '紧凑型'}、约{len(content)}字{theme_info}"
 
     return {
         "title": title,
@@ -353,6 +487,33 @@ def template_rewrite(source_post, custom_theme=""):
         "style_analysis": style,
         "method": "template_based"
     }
+
+
+def extract_core_keywords(title, content, tags):
+    """从帖子中提取核心关键词（用于主题替换）"""
+    import collections
+    # 常见的可替换主题词
+    candidates = []
+    # 从标题和标签中提取
+    text = title + " " + " ".join(tags)
+    # 简单的分词：按常见分隔符拆分
+    words = re.findall(r'[一-鿿\w]+', text)
+    # 过滤掉常见的无意义词
+    stop_words = {'的', '了', '是', '我', '你', '他', '她', '它', '们', '在', '有', '和', '都',
+                  '不', '就', '也', '还', '要', '会', '可', '到', '对', '去', '来', '能', '让',
+                  '把', '被', '从', '最', '为', '及', '与', '或', '但', '而', '且', '所', '如',
+                  '这', '那', '个', '中', '上', '下', '前', '后', '里', '外', '大', '小', '多',
+                  '少', '很', '真', '太', '更', '非常', '比较', '一个', '什么', '怎么', '如何',
+                  '为什么', '多少', '可以', '应该', '已经', '没有', '知道', '觉得', '一个', '一种',
+                  '技巧', '方法', '秘诀', '分享', '推荐', '必备', '教程', '攻略', '合集', '盘点',
+                  '隐藏', '学习', '提升', '入门', '必看', '效率', '好物', '神器', '宝藏', '笔记'}
+    for w in words:
+        if len(w) >= 2 and w not in stop_words:
+            candidates.append(w)
+
+    # 按频率排序
+    counter = collections.Counter(candidates)
+    return [w for w, _ in counter.most_common(10)]
 
 # ============================================================
 # Flask 路由
@@ -445,7 +606,13 @@ def rewrite():
     if not source_post:
         return jsonify({"error": "帖子不存在"}), 404
 
-    result = template_rewrite(source_post, custom_theme)
+    # 优先使用 AI 仿写，失败时回退到模板仿写
+    result = None
+    if AI_API_KEY:
+        result = ai_rewrite(source_post, custom_theme)
+
+    if not result:
+        result = template_rewrite(source_post, custom_theme)
 
     return jsonify({
         "source_post": {
