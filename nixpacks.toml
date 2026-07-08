@@ -1,0 +1,11 @@
+# Railway 部署配置 - 使用 Python (Flask)
+# nixpacks 会自动检测并提供正确的 Python 版本和依赖
+
+[phases.setup]
+nixPkgs = ["...", "python311"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "python app.py"

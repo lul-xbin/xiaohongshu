@@ -663,9 +663,10 @@ def hot_posts():
 # ============================================================
 
 if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
     print("=" * 60)
     print("  \U0001f525 小红书热门帖子查询 & AI仿写工具 (Flask)")
     print(f"  \U0001f4e1 数据源: {'Mock模拟数据' if USE_MOCK_DATA or not SOCIALDATAX_API_KEY else 'SocialDataX 真实API'}")
-    print(f"  \U0001f310 访问: http://localhost:5000")
+    print(f"  \U0001f310 访问: http://localhost:{port}")
     print("=" * 60)
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=port)
