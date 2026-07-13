@@ -339,11 +339,13 @@ async function doRewrite() {
     `;
 
     const customTheme = $('#customTheme').value.trim();
+    const similarity = parseInt($('#similaritySlider').value) || 50;
 
     try {
         const data = await apiPost('/api/rewrite', {
             note_id: state.selectedRewritePost.note_id,
-            custom_theme: customTheme || undefined
+            custom_theme: customTheme || undefined,
+            similarity: similarity
         });
 
         if (data.error) { showToast(data.error, 'error'); return; }
@@ -376,6 +378,13 @@ async function doRewrite() {
 
         $('#rewriteResultArea').style.display = 'none';
         $('#rewriteCompare').style.display = 'grid';
+        $('#diffView').style.display = 'block';
+        $('#diffAppliedResult').style.display = 'none';
+
+        // 渲染差异视图
+        if (data.diff) {
+            renderDiff(data.diff, data.source_post.content, data.rewritten.content);
+        }
 
         showToast('仿写完成！', 'success');
     } catch (err) {
@@ -404,6 +413,139 @@ function copyRewritten() {
         ta.remove();
         showToast('已复制到剪贴板！', 'success');
     });
+}
+
+// ============================================================
+// 差异视图渲染
+// ============================================================
+let diffDecisions = {}; // 用户的差异决策
+
+function renderDiff(diff, sourceContent, rewrittenContent) {
+    if (!diff || !diff.blocks) return;
+
+    // 存储当前 diff 上下文供 apply 使用
+    state._currentDiffSource = sourceContent;
+    state._currentDiffRewritten = rewrittenContent;
+
+    // 重置决策（默认全部接受）
+    diffDecisions = {};
+    diff.blocks.forEach((block, i) => {
+        diffDecisions[`block_${i}`] = 'accept';
+    });
+
+    // 渲染统计信息
+    $('#diffStats').innerHTML = `
+        <span class="diff-stat">📊 文本相似度: <strong>${diff.similarity_score}%</strong></span>
+        <span class="diff-stat added-count">➕ 新增 ${diff.added} 处</span>
+        <span class="diff-stat deleted-count">➖ 删除 ${diff.deleted} 处</span>
+        <span class="diff-stat modified-count">✏️ 修改 ${diff.modified} 处</span>
+        <span class="diff-stat unchanged-count">· 不变 ${diff.unchanged} 处</span>
+    `;
+
+    // 渲染差异块
+    $('#diffBlocks').innerHTML = diff.blocks.map((block, i) => {
+        const blockId = `block_${i}`;
+        switch (block.type) {
+            case 'unchanged':
+                return `<div class="diff-block diff-unchanged">
+                    <span class="diff-marker">·</span>
+                    <span class="diff-text">${escapeHtml(block.text)}</span>
+                </div>`;
+            case 'added':
+                return `<div class="diff-block diff-added" id="${blockId}">
+                    <span class="diff-marker">➕</span>
+                    <span class="diff-text">${escapeHtml(block.newText)}</span>
+                    <div class="diff-block-actions">
+                        <button class="btn-diff accept active" data-block="${blockId}" data-action="accept">保留</button>
+                        <button class="btn-diff reject" data-block="${blockId}" data-action="reject">删除</button>
+                    </div>
+                </div>`;
+            case 'deleted':
+                return `<div class="diff-block diff-deleted" id="${blockId}">
+                    <span class="diff-marker">➖</span>
+                    <span class="diff-text">${escapeHtml(block.oldText)}</span>
+                    <div class="diff-block-actions">
+                        <button class="btn-diff accept active" data-block="${blockId}" data-action="accept">删除</button>
+                        <button class="btn-diff reject" data-block="${blockId}" data-action="reject">恢复</button>
+                    </div>
+                </div>`;
+            case 'modified':
+                return `<div class="diff-block diff-modified" id="${blockId}">
+                    <span class="diff-marker">✏️</span>
+                    <div class="diff-modified-content">
+                        <div class="diff-old">${escapeHtml(block.oldText)}</div>
+                        <div class="diff-arrow">→</div>
+                        <div class="diff-new">${escapeHtml(block.newText)}</div>
+                    </div>
+                    <div class="diff-block-actions">
+                        <button class="btn-diff accept active" data-block="${blockId}" data-action="accept">接受修改</button>
+                        <button class="btn-diff reject" data-block="${blockId}" data-action="reject">保留原文</button>
+                    </div>
+                </div>`;
+        }
+    }).join('');
+
+    // 绑定差异块按钮事件
+    $$('.btn-diff').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const blockId = btn.dataset.block;
+            const action = btn.dataset.action;
+            toggleDiffDecision(blockId, action);
+        });
+    });
+}
+
+function toggleDiffDecision(blockId, action) {
+    diffDecisions[blockId] = action;
+
+    // 更新按钮状态
+    const block = document.getElementById(blockId);
+    if (!block) return;
+    const acceptBtn = block.querySelector('.btn-diff.accept');
+    const rejectBtn = block.querySelector('.btn-diff.reject');
+    if (acceptBtn) acceptBtn.classList.toggle('active', action === 'accept');
+    if (rejectBtn) rejectBtn.classList.toggle('active', action === 'reject');
+}
+
+async function applyDiffDecisions() {
+    if (!state._currentDiffSource || !state._currentDiffRewritten) {
+        showToast('没有可应用的差异', 'error');
+        return;
+    }
+
+    const btn = $('#diffApply');
+    btn.disabled = true;
+    btn.textContent = '应用修改中...';
+
+    try {
+        const data = await apiPost('/api/rewrite/adjust', {
+            source_content: state._currentDiffSource,
+            rewritten_content: state._currentDiffRewritten,
+            decisions: diffDecisions
+        });
+
+        if (data.error) { showToast(data.error, 'error'); return; }
+
+        // 显示最终结果
+        $('#diffFinalContent').textContent = data.content;
+        $('#diffAppliedResult').style.display = 'block';
+        state._finalContent = data.content;
+
+        showToast('修改已应用！', 'success');
+    } catch (err) {
+        showToast('应用修改失败', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '📝 应用修改';
+    }
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 function useForRewrite(noteId) {
@@ -499,6 +641,41 @@ function init() {
     });
     $('#rewriteBtn').addEventListener('click', doRewrite);
     $('#copyRewritten').addEventListener('click', copyRewritten);
+
+    // 相似度滑块
+    $('#similaritySlider').addEventListener('input', () => {
+        const val = $('#similaritySlider').value;
+        $('#similarityValue').textContent = val + '%';
+    });
+
+    // 差异视图操作
+    $('#diffAcceptAll').addEventListener('click', () => {
+        Object.keys(diffDecisions).forEach(k => { diffDecisions[k] = 'accept'; });
+        $$('.btn-diff.accept').forEach(b => b.classList.add('active'));
+        $$('.btn-diff.reject').forEach(b => b.classList.remove('active'));
+        showToast('已全部接受修改', 'info');
+    });
+    $('#diffRejectAll').addEventListener('click', () => {
+        Object.keys(diffDecisions).forEach(k => { diffDecisions[k] = 'reject'; });
+        $$('.btn-diff.reject').forEach(b => b.classList.add('active'));
+        $$('.btn-diff.accept').forEach(b => b.classList.remove('active'));
+        showToast('已全部恢复原文', 'info');
+    });
+    $('#diffApply').addEventListener('click', applyDiffDecisions);
+    $('#copyDiffFinal').addEventListener('click', () => {
+        if (!state._finalContent) return;
+        navigator.clipboard.writeText(state._finalContent).then(() => {
+            showToast('最终结果已复制！', 'success');
+        }).catch(() => {
+            const ta = document.createElement('textarea');
+            ta.value = state._finalContent;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
+            showToast('最终结果已复制！', 'success');
+        });
+    });
 
     // 模态框
     $('#modalClose').addEventListener('click', closeModal);

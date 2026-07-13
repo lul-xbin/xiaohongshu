@@ -313,7 +313,7 @@ def get_mock_detail(note_id):
 # 模板仿写
 # ============================================================
 
-def ai_rewrite(source_post, custom_theme=""):
+def ai_rewrite(source_post, custom_theme="", similarity=50):
     """使用 AI API 进行智能仿写"""
     if not AI_API_KEY:
         return None
@@ -321,6 +321,14 @@ def ai_rewrite(source_post, custom_theme=""):
     title = source_post.get("title", "")
     content = source_post.get("content", "")
     tags = source_post.get("tags", [])
+
+    # 根据相似度构建改写强度指令
+    if similarity <= 30:
+        intensity_prompt = f"【改写强度：低相似度 {similarity}%】大幅改写，仅保留核心主题思想。使用完全不同的表达方式、例证、具体细节和个人经历。结构也可以适当调整。"
+    elif similarity <= 60:
+        intensity_prompt = f"【改写强度：中相似度 {similarity}%】保持原帖的风格和基本结构，但替换具体内容、例证和细节。使用不同的措辞和表达方式。"
+    else:
+        intensity_prompt = f"【改写强度：高相似度 {similarity}%】保持原帖框架和主要观点，微调措辞和表达方式。保留核心结构和关键信息，替换少量细节和例证。"
 
     theme_instruction = ""
     if custom_theme:
@@ -345,6 +353,7 @@ def ai_rewrite(source_post, custom_theme=""):
 4. 生成新的相关标签（3-5个）
 5. 标题也要重新创作，保持吸引眼球的风格
 6. 内容必须原创，不能直接复制原帖
+7. {intensity_prompt}
 
 请以JSON格式返回：
 {{
@@ -365,7 +374,7 @@ def ai_rewrite(source_post, custom_theme=""):
                 {"role": "system", "content": "你是一个小红书爆款笔记仿写专家，擅长分析爆款内容风格并生成原创仿写。请只返回JSON格式的结果。"},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.8,
+            "temperature": 1.0 if similarity <= 30 else (0.8 if similarity <= 60 else 0.6),
             "max_tokens": 2000
         }).encode("utf-8")
 
@@ -395,7 +404,8 @@ def ai_rewrite(source_post, custom_theme=""):
             "content": ai_result.get("content", content),
             "tags": ai_result.get("tags", tags)[:5],
             "style_analysis": ai_result.get("style_analysis", ""),
-            "method": "ai_powered"
+            "method": "ai_powered",
+            "similarity": similarity
         }
 
     except Exception as e:
@@ -403,11 +413,12 @@ def ai_rewrite(source_post, custom_theme=""):
         return None
 
 
-def template_rewrite(source_post, custom_theme=""):
+def template_rewrite(source_post, custom_theme="", similarity=50):
     """
     模板仿写（AI API 不可用时的回退方案）。
     当用户指定 custom_theme 时，解析其中的关键词对（如"上海→北京"、"美食→旅行"），
     并用这些映射替换原文中的关键词。
+    根据 similarity 参数控制替换的力度。
     """
     title = source_post.get("title", "")
     content = source_post.get("content", "")
@@ -418,16 +429,11 @@ def template_rewrite(source_post, custom_theme=""):
 
     # 1. 解析用户自定义主题方向
     if custom_theme:
-        # 支持多种格式：
-        #   "换成北京美食" → 从上下文中提取
-        #   "上海→北京, 美食→旅行" → 直接解析映射
-        #   "北京" → 作为关键词尝试智能匹配
         pairs = re.split(r'[,，、\s]+', custom_theme)
         for pair in pairs:
             pair = pair.strip()
             if not pair:
                 continue
-            # 格式: A→B 或 A->B 或 A换成B 或 A改B
             m = re.match(r'(.+?)\s*[→\->]\s*(.+)', pair)
             if m:
                 replace_map[m.group(1).strip()] = m.group(2).strip()
@@ -437,38 +443,41 @@ def template_rewrite(source_post, custom_theme=""):
                     replace_map[m.group(1).strip()] = m.group(2).strip()
 
     # 2. 如果用户没给明确映射，尝试从 custom_theme 中提取有意义的词作为新主题
-    #    并智能替换原文中的核心关键词
     if not replace_map and custom_theme:
-        # 把 custom_theme 整体作为一个方向提示，替换原文中最核心的关键词
         core_words = extract_core_keywords(title, content, tags)
         if core_words and custom_theme:
-            # 用 custom_theme 中的最后一个词或主要词替换原文核心词
             new_theme_word = custom_theme.strip()
-            # 去掉"换成"、"改成"、"仿写"等前缀
             new_theme_word = re.sub(r'^.*?[换改仿][成写到]?\s*', '', new_theme_word)
             if core_words[0] in replace_map:
-                pass  # already mapped
-            # 尝试找到最核心的主题词并替换
+                pass
             for cw in core_words[:2]:
                 if cw not in replace_map and len(cw) >= 2:
                     replace_map[cw] = new_theme_word
                     break
 
-    # 3. 应用所有替换（用户自定义优先）
-    for old, new in replace_map.items():
+    # 3. 根据相似度决定替换数量
+    replace_items = list(replace_map.items())
+    if similarity <= 30:
+        effective_count = len(replace_items)  # 全部替换
+    elif similarity <= 60:
+        effective_count = max(1, int(len(replace_items) * 0.6))
+    else:
+        effective_count = max(0, int(len(replace_items) * 0.3))
+
+    # 4. 应用替换
+    for old, new in replace_items[:effective_count]:
         title = title.replace(old, new)
         content = content.replace(old, new)
 
-    # 4. 更新标签
+    # 5. 更新标签
     new_tags = []
     for tag in tags:
         nt = tag
-        for old, new in replace_map.items():
+        for old, new in replace_items[:effective_count]:
             nt = nt.replace(old, new)
         if nt not in new_tags:
             new_tags.append(nt)
 
-    # 如果没有任何变化，标记一下
     if title == source_post.get("title", "") and not replace_map:
         title = "【仿写】" + title
 
@@ -485,7 +494,8 @@ def template_rewrite(source_post, custom_theme=""):
         "content": content,
         "tags": new_tags[:5],
         "style_analysis": style,
-        "method": "template_based"
+        "method": "template_based",
+        "similarity": similarity
     }
 
 
@@ -514,6 +524,111 @@ def extract_core_keywords(title, content, tags):
     # 按频率排序
     counter = collections.Counter(candidates)
     return [w for w, _ in counter.most_common(10)]
+
+
+# ============================================================
+# 文本差异计算 (基于 LCS 算法)
+# ============================================================
+
+def compute_diff(source_text, rewritten_text):
+    """计算原文和仿写文之间的差异"""
+    def split_to_chars(text):
+        segments = []
+        current = ''
+        for ch in text:
+            current += ch
+            if ch in ('\n', '。', '！', '？', '；'):
+                if current.strip():
+                    segments.append(current.strip())
+                current = ''
+        if current.strip():
+            segments.append(current.strip())
+        return segments if segments else [text]
+
+    source_segs = split_to_chars(source_text)
+    rewritten_segs = split_to_chars(rewritten_text)
+
+    m, n = len(source_segs), len(rewritten_segs)
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
+
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if source_segs[i - 1] == rewritten_segs[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1] + 1
+            else:
+                dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+
+    # 回溯找出匹配
+    lcs_matches = set()
+    i, j = m, n
+    while i > 0 and j > 0:
+        if source_segs[i - 1] == rewritten_segs[j - 1]:
+            lcs_matches.add((i - 1, j - 1))
+            i -= 1
+            j -= 1
+        elif dp[i - 1][j] >= dp[i][j - 1]:
+            i -= 1
+        else:
+            j -= 1
+
+    # 生成 diff blocks
+    blocks = []
+    si, ri = 0, 0
+    while si < len(source_segs) or ri < len(rewritten_segs):
+        if si < len(source_segs) and ri < len(rewritten_segs) and (si, ri) in lcs_matches:
+            blocks.append({"type": "unchanged", "text": source_segs[si], "oldPosition": si, "newPosition": ri})
+            si += 1
+            ri += 1
+        elif si < len(source_segs) and ri < len(rewritten_segs):
+            blocks.append({"type": "modified", "oldText": source_segs[si], "newText": rewritten_segs[ri], "oldPosition": si, "newPosition": ri})
+            si += 1
+            ri += 1
+        elif si < len(source_segs):
+            blocks.append({"type": "deleted", "oldText": source_segs[si], "newText": None, "oldPosition": si, "newPosition": None})
+            si += 1
+        elif ri < len(rewritten_segs):
+            blocks.append({"type": "added", "oldText": None, "newText": rewritten_segs[ri], "oldPosition": None, "newPosition": ri})
+            ri += 1
+
+    unchanged_count = sum(1 for b in blocks if b["type"] == "unchanged")
+    total_blocks = len(blocks) or 1
+    similarity_score = round((unchanged_count / total_blocks) * 100)
+
+    return {
+        "similarity_score": similarity_score,
+        "total_blocks": len(blocks),
+        "unchanged": unchanged_count,
+        "added": sum(1 for b in blocks if b["type"] == "added"),
+        "deleted": sum(1 for b in blocks if b["type"] == "deleted"),
+        "modified": sum(1 for b in blocks if b["type"] == "modified"),
+        "blocks": blocks
+    }
+
+
+def apply_diff_decisions(source_text, rewritten_text, decisions):
+    """根据用户的差异决策拼接最终文本"""
+    diff = compute_diff(source_text, rewritten_text)
+    result_parts = []
+
+    for i, block in enumerate(diff["blocks"]):
+        decision = decisions.get(f"block_{i}", "accept")
+
+        if block["type"] == "unchanged":
+            result_parts.append(block["text"])
+        elif block["type"] == "added":
+            if decision == "accept":
+                result_parts.append(block["newText"])
+        elif block["type"] == "deleted":
+            if decision != "accept":
+                result_parts.append(block["oldText"])
+        elif block["type"] == "modified":
+            if decision == "accept":
+                result_parts.append(block["newText"])
+            else:
+                result_parts.append(block["oldText"])
+
+    return '\n'.join(result_parts)
+
 
 # ============================================================
 # Flask 路由
@@ -591,6 +706,7 @@ def rewrite():
 
     note_id = data.get('note_id', '')
     custom_theme = data.get('custom_theme', '')
+    similarity = min(90, max(10, int(data.get('similarity', 50))))
 
     if not note_id:
         return jsonify({"error": "请提供帖子ID"}), 400
@@ -609,10 +725,13 @@ def rewrite():
     # 优先使用 AI 仿写，失败时回退到模板仿写
     result = None
     if AI_API_KEY:
-        result = ai_rewrite(source_post, custom_theme)
+        result = ai_rewrite(source_post, custom_theme, similarity)
 
     if not result:
-        result = template_rewrite(source_post, custom_theme)
+        result = template_rewrite(source_post, custom_theme, similarity)
+
+    # 计算文本差异
+    diff = compute_diff(source_post.get("content", ""), result.get("content", ""))
 
     return jsonify({
         "source_post": {
@@ -623,8 +742,26 @@ def rewrite():
             "collects": source_post.get("collects"),
             "comments": source_post.get("comments"),
         },
-        "rewritten": result
+        "rewritten": result,
+        "diff": diff
     })
+
+
+@app.route('/api/rewrite/adjust', methods=['POST'])
+def rewrite_adjust():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "请提供请求数据"}), 400
+
+    source_content = data.get('source_content', '')
+    rewritten_content = data.get('rewritten_content', '')
+    decisions = data.get('decisions', {})
+
+    if not source_content or not rewritten_content:
+        return jsonify({"error": "请提供原帖内容和仿写内容"}), 400
+
+    adjusted = apply_diff_decisions(source_content, rewritten_content, decisions)
+    return jsonify({"content": adjusted})
 
 @app.route('/api/hot-posts')
 def hot_posts():

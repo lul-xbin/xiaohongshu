@@ -684,6 +684,291 @@ body {
     padding-top: 48px;
 }
 
+/* --- 相似度滑块 --- */
+.similarity-control {
+    margin-bottom: 20px;
+    padding: 16px;
+    background: var(--bg);
+    border-radius: var(--radius);
+}
+
+.similarity-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.similarity-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.similarity-slider {
+    width: 100%;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: linear-gradient(to right,
+        #10b981 0%,       /* 绿色: 低相似 */
+        #f59e0b 50%,      /* 黄色: 中相似 */
+        #ff2442 100%      /* 红色: 高相似 */
+    );
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+}
+
+.similarity-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 3px solid var(--primary);
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: var(--transition);
+}
+
+.similarity-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: var(--shadow);
+}
+
+.similarity-slider::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 3px solid var(--primary);
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+}
+
+.similarity-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    text-align: center;
+}
+
+.similarity-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    flex: 1;
+    line-height: 1.4;
+}
+
+.similarity-label small {
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+/* --- 差异对比视图 --- */
+.diff-view {
+    margin-top: 24px;
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    padding: 20px;
+}
+
+.diff-header {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.diff-header h4 {
+    font-size: 16px;
+    margin-bottom: 8px;
+}
+
+.diff-stats {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.diff-stat {
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding: 2px 8px;
+    background: var(--bg);
+    border-radius: 6px;
+}
+
+.diff-stat strong {
+    color: var(--text);
+}
+
+.diff-stat.added-count { color: #059669; }
+.diff-stat.deleted-count { color: #dc2626; }
+.diff-stat.modified-count { color: #d97706; }
+.diff-stat.unchanged-count { color: var(--text-muted); }
+
+.diff-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* --- 差异块 --- */
+.diff-blocks {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
+    max-height: 520px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.diff-block {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    line-height: 1.7;
+    transition: var(--transition);
+}
+
+.diff-marker {
+    flex-shrink: 0;
+    font-size: 14px;
+    margin-top: 1px;
+}
+
+.diff-text {
+    flex: 1;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.diff-unchanged {
+    background: #f9fafb;
+    color: var(--text-muted);
+}
+
+.diff-added {
+    background: #d4edda;
+    border-left: 4px solid #28a745;
+}
+
+.diff-deleted {
+    background: #f8d7da;
+    border-left: 4px solid #dc3545;
+    text-decoration: line-through;
+    opacity: 0.85;
+}
+
+.diff-modified {
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+}
+
+.diff-modified-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.diff-old {
+    color: #dc2626;
+    text-decoration: line-through;
+    background: rgba(220, 38, 38, 0.06);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.diff-arrow {
+    font-size: 14px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.diff-new {
+    color: #059669;
+    background: rgba(5, 150, 105, 0.06);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+/* --- 差异块操作按钮 --- */
+.diff-block-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.btn-diff {
+    padding: 3px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 11px;
+    cursor: pointer;
+    transition: var(--transition);
+    white-space: nowrap;
+}
+
+.btn-diff:hover {
+    border-color: var(--primary-light);
+}
+
+.btn-diff.accept.active {
+    background: #059669;
+    border-color: #059669;
+    color: #fff;
+}
+
+.btn-diff.reject.active {
+    background: #dc2626;
+    border-color: #dc2626;
+    color: #fff;
+}
+
+/* --- 最终结果区域 --- */
+.diff-applied-result {
+    margin-top: 16px;
+    padding: 16px;
+    background: #ecfdf5;
+    border-radius: var(--radius);
+    border: 1px solid #a7f3d0;
+}
+
+.diff-applied-result h4 {
+    font-size: 15px;
+    margin-bottom: 10px;
+    color: #059669;
+}
+
+.diff-applied-result .compare-content {
+    max-height: 360px;
+    overflow-y: auto;
+    font-size: 14px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    color: var(--text);
+    margin-bottom: 10px;
+}
+
 /* --- Toast --- */
 .toast-container {
     position: fixed;
