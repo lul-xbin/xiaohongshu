@@ -196,6 +196,9 @@ async function openPostDetail(noteId) {
             return;
         }
 
+        // 存储当前帖子供复制使用
+        state.currentDetailPost = post;
+
         body.innerHTML = `
             ${post.images ? `
             <div class="detail-images">
@@ -222,6 +225,9 @@ async function openPostDetail(noteId) {
                 <div class="detail-stat">🔄 <span class="detail-stat-value">${formatNumber(post.shares)}</span> 分享</div>
             </div>
             <div style="display:flex;gap:8px;">
+                <button class="btn btn-primary" onclick="copyPostFullText()">
+                    📋 复制全文
+                </button>
                 <button class="btn btn-outline" onclick="window.open('${post.url || '#'}', '_blank')">
                     🔗 查看原文
                 </button>
@@ -234,6 +240,24 @@ async function openPostDetail(noteId) {
 
 function closeModal() {
     $('#modalOverlay').style.display = 'none';
+}
+
+function copyPostFullText() {
+    const post = state.currentDetailPost;
+    if (!post) return;
+    const text = `${post.title}\n\n${post.content}\n\n${(post.tags || []).map(t => '#' + t).join(' ')}`;
+
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('全文已复制！可直接粘贴到小红书发布', 'success');
+    }).catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+        showToast('全文已复制！', 'success');
+    });
 }
 
 // ============================================================
