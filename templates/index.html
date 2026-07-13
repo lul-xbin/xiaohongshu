@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>小红书爆款笔记查询 &amp; AI仿写工具</title>
+    <title>小红书爆款笔记查询工具</title>
     <link rel="stylesheet" href="/static/style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
 </head>
@@ -20,7 +20,6 @@
                 <nav class="nav-tabs" id="navTabs">
                     <button class="nav-tab active" data-tab="search">🔍 搜索发现</button>
                     <button class="nav-tab" data-tab="hot">📈 热门榜单</button>
-                    <button class="nav-tab" data-tab="rewrite">✍️ AI仿写</button>
                 </nav>
                 <div class="header-status" id="headerStatus">
                     <span class="status-dot mock"></span>
@@ -122,97 +121,6 @@
             </div>
         </section>
 
-        <!-- ======== AI仿写面板 ======== -->
-        <section class="panel" id="panel-rewrite" style="display:none">
-            <div class="rewrite-header">
-                <h2>✍️ AI爆款笔记仿写</h2>
-                <p>基于热门笔记的风格和结构，自动生成你的原创内容</p>
-            </div>
-            <div class="rewrite-layout">
-                <!-- 左侧：选择原帖 -->
-                <div class="rewrite-side">
-                    <h3>📌 第一步：选择参考帖子</h3>
-                    <div class="rewrite-search-box">
-                        <input type="text" id="rewriteKeyword" class="search-input small"
-                               placeholder="搜索关键词找参考帖子...">
-                        <button class="btn btn-sm btn-primary" id="rewriteSearchBtn">搜索</button>
-                    </div>
-                    <div class="rewrite-post-list" id="rewritePostList">
-                        <div class="rewrite-post-placeholder">
-                            <p>👆 搜索并选择一个热门帖子作为仿写参考</p>
-                            <p class="hint">选中的帖子将被分析风格和结构</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 右侧：仿写结果 -->
-                <div class="rewrite-main">
-                    <h3>📝 第二步：设置相似度 & 仿写</h3>
-
-                    <!-- 相似度滑块 -->
-                    <div class="similarity-control">
-                        <div class="similarity-header">
-                            <span>📊 仿写相似度</span>
-                            <span class="similarity-value" id="similarityValue">50%</span>
-                        </div>
-                        <input type="range" id="similaritySlider" class="similarity-slider"
-                               min="10" max="90" value="50" step="10">
-                        <div class="similarity-labels">
-                            <span class="similarity-label" data-level="low">🔄 低相似<br><small>大幅改写</small></span>
-                            <span class="similarity-label" data-level="mid">⚖️ 中相似<br><small>保持风格</small></span>
-                            <span class="similarity-label" data-level="high">📝 高相似<br><small>微调表达</small></span>
-                        </div>
-                    </div>
-
-                    <div class="rewrite-theme-input">
-                        <input type="text" id="customTheme" class="search-input small"
-                               placeholder="可选：指定仿写主题方向（如：换成北京美食）">
-                        <button class="btn btn-primary" id="rewriteBtn" disabled>
-                            🪄 开始仿写
-                        </button>
-                    </div>
-                    <div class="rewrite-result-area" id="rewriteResultArea">
-                        <div class="rewrite-placeholder">
-                            <div class="placeholder-icon">🤖</div>
-                            <p>选择参考帖子后，点击"开始仿写"</p>
-                            <p class="hint">AI将分析爆款笔记的风格并生成新内容</p>
-                        </div>
-                    </div>
-                    <!-- 对比视图 -->
-                    <div class="rewrite-compare" id="rewriteCompare" style="display:none">
-                        <div class="compare-panel">
-                            <h4>📋 原帖内容</h4>
-                            <div class="compare-content" id="compareSource"></div>
-                        </div>
-                        <div class="compare-divider">→</div>
-                        <div class="compare-panel">
-                            <h4>✨ 仿写结果</h4>
-                            <div class="compare-content" id="compareRewritten"></div>
-                            <button class="btn btn-outline btn-sm" id="copyRewritten">📋 一键复制</button>
-                        </div>
-                    </div>
-
-                    <!-- 差异对比视图 -->
-                    <div class="diff-view" id="diffView" style="display:none">
-                        <div class="diff-header">
-                            <h4>📊 差异对比</h4>
-                            <div class="diff-stats" id="diffStats"></div>
-                            <div class="diff-actions">
-                                <button class="btn btn-sm btn-outline" id="diffAcceptAll">✅ 全部接受</button>
-                                <button class="btn btn-sm btn-outline" id="diffRejectAll">↩️ 全部恢复原文</button>
-                                <button class="btn btn-sm btn-primary" id="diffApply">📝 应用修改</button>
-                            </div>
-                        </div>
-                        <div class="diff-blocks" id="diffBlocks"></div>
-                        <div class="diff-applied-result" id="diffAppliedResult" style="display:none">
-                            <h4>✅ 最终结果</h4>
-                            <div class="compare-content" id="diffFinalContent"></div>
-                            <button class="btn btn-outline btn-sm" id="copyDiffFinal">📋 复制最终结果</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
     </main>
 
     <!-- ======== 帖子详情弹窗 ======== -->

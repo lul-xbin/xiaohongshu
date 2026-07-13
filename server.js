@@ -40,8 +40,6 @@ loadEnv();
 // ============================================================
 const SOCIALDATAX_API_KEY = process.env.SOCIALDATAX_API_KEY || '';
 const SOCIALDATAX_MCP_URL = process.env.SOCIALDATAX_MCP_URL || 'https://mcp.52choujiang.com/xhs/mcp';
-const AI_API_KEY = process.env.AI_API_KEY || '';
-const AI_API_BASE = process.env.AI_API_BASE || '';
 const USE_MOCK_DATA = process.env.USE_MOCK_DATA === 'false' ? false : true;
 
 // ============================================================
@@ -444,192 +442,6 @@ async function getRealPostDetail(noteId) {
 }
 
 // ============================================================
-// 模板化仿写
-// ============================================================
-function templateRewrite(sourcePost, customTheme = '', similarity = 50) {
-    let title = sourcePost.title || '';
-    let content = sourcePost.content || '';
-    const tags = [...(sourcePost.tags || [])];
-
-    const themeMap = {
-        '办公': '学习', 'Python': 'JavaScript', '编程': '写作',
-        '美食': '旅行', '上海': '北京', 'iPhone': '安卓',
-        '减脂': '增肌', '穿搭': '护肤', '手机': '平板',
-        '3年': '2年', '三个月': '两个月', '30天': '21天',
-        '12斤': '8斤', '200': '150', '35': '30', '80': '70',
-        '50': '45', '60': '55', '40': '35', '5个': '6个', '5家': '6家'
-    };
-
-    // 根据相似度决定替换比例
-    // 低相似度: 替换更多关键词; 高相似度: 替换更少
-    const entries = Object.entries(themeMap);
-    const replaceCount = similarity <= 30 ? entries.length : (similarity <= 60 ? Math.floor(entries.length * 0.6) : Math.floor(entries.length * 0.3));
-
-    for (let i = 0; i < Math.min(replaceCount, entries.length); i++) {
-        const [old, nw] = entries[i];
-        title = title.replace(old, nw);
-        content = content.replace(new RegExp(old, 'g'), nw);
-    }
-
-    const newTags = tags.map(t => {
-        let nt = t;
-        for (let i = 0; i < Math.min(replaceCount, entries.length); i++) {
-            const [old, nw] = entries[i];
-            nt = nt.replace(old, nw);
-        }
-        return nt;
-    }).filter((t, i, arr) => arr.indexOf(t) === i).slice(0, 5);
-
-    if (title === sourcePost.title) {
-        title = '【仿写】' + title;
-    }
-
-    const hasEmoji = /[^\w\s一-鿿，。！？、；：""''（）]/.test(sourcePost.content || '');
-    const hasNumbers = /[①-⑩1-9️⃣]/.test(sourcePost.content || '');
-    const sections = (sourcePost.content || '').split('\n\n').length;
-    const styleAnalysis = `风格特点：${hasEmoji ? 'emoji丰富' : '文字为主'}、${hasNumbers ? '分点列举' : '段落叙述'}、${sections >= 3 ? '多段落结构' : '紧凑型'}、约${(sourcePost.content || '').length}字`;
-
-    return {
-        title,
-        content,
-        tags: newTags,
-        style_analysis: styleAnalysis,
-        method: 'template_based',
-        similarity: similarity
-    };
-}
-
-// ============================================================
-// 文本差异计算 (基于 LCS 算法)
-// ============================================================
-function computeDiff(sourceText, rewrittenText) {
-    // 按句子/行切分
-    const splitToChars = (text) => {
-        // 按常见中文标点和换行切分，但保留分隔符
-        const segments = [];
-        let current = '';
-        for (const ch of text) {
-            current += ch;
-            if (ch === '\n' || ch === '。' || ch === '！' || ch === '？' || ch === '；') {
-                if (current.trim()) segments.push(current.trim());
-                current = '';
-            }
-        }
-        if (current.trim()) segments.push(current.trim());
-        return segments.length > 0 ? segments : [text];
-    };
-
-    const sourceSegs = splitToChars(sourceText);
-    const rewrittenSegs = splitToChars(rewrittenText);
-
-    // LCS 算法
-    const m = sourceSegs.length;
-    const n = rewrittenSegs.length;
-    const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
-
-    for (let i = 1; i <= m; i++) {
-        for (let j = 1; j <= n; j++) {
-            if (sourceSegs[i - 1] === rewrittenSegs[j - 1]) {
-                dp[i][j] = dp[i - 1][j - 1] + 1;
-            } else {
-                dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-            }
-        }
-    }
-
-    // 回溯找出匹配
-    const lcsMatches = new Set();
-    let i = m, j = n;
-    while (i > 0 && j > 0) {
-        if (sourceSegs[i - 1] === rewrittenSegs[j - 1]) {
-            lcsMatches.add(`${i - 1},${j - 1}`);
-            i--; j--;
-        } else if (dp[i - 1][j] >= dp[i][j - 1]) {
-            i--;
-        } else {
-            j--;
-        }
-    }
-
-    // 生成 diff blocks
-    const blocks = [];
-    let si = 0, ri = 0;
-    while (si < sourceSegs.length || ri < rewrittenSegs.length) {
-        if (si < sourceSegs.length && ri < rewrittenSegs.length && lcsMatches.has(`${si},${ri}`)) {
-            blocks.push({ type: 'unchanged', text: sourceSegs[si], oldPosition: si, newPosition: ri });
-            si++; ri++;
-        } else if (si < sourceSegs.length && ri < rewrittenSegs.length) {
-            // 两边都有但不同 → modified
-            blocks.push({ type: 'modified', oldText: sourceSegs[si], newText: rewrittenSegs[ri], oldPosition: si, newPosition: ri });
-            si++; ri++;
-        } else if (si < sourceSegs.length) {
-            blocks.push({ type: 'deleted', oldText: sourceSegs[si], newText: null, oldPosition: si, newPosition: null });
-            si++;
-        } else if (ri < rewrittenSegs.length) {
-            blocks.push({ type: 'added', oldText: null, newText: rewrittenSegs[ri], oldPosition: null, newPosition: ri });
-            ri++;
-        }
-    }
-
-    // 计算相似度分数
-    const unchangedCount = blocks.filter(b => b.type === 'unchanged').length;
-    const totalBlocks = blocks.length || 1;
-    const similarityScore = Math.round((unchangedCount / totalBlocks) * 100);
-
-    return {
-        similarity_score: similarityScore,
-        total_blocks: blocks.length,
-        unchanged: unchangedCount,
-        added: blocks.filter(b => b.type === 'added').length,
-        deleted: blocks.filter(b => b.type === 'deleted').length,
-        modified: blocks.filter(b => b.type === 'modified').length,
-        blocks: blocks
-    };
-}
-
-// ============================================================
-// 应用用户的差异决策，拼接最终文本
-// ============================================================
-function applyDiffDecisions(sourceText, rewrittenText, decisions) {
-    const diff = computeDiff(sourceText, rewrittenText);
-    const resultParts = [];
-
-    for (let i = 0; i < diff.blocks.length; i++) {
-        const block = diff.blocks[i];
-        const decision = decisions[`block_${i}`] || 'accept'; // 默认接受
-
-        switch (block.type) {
-            case 'unchanged':
-                resultParts.push(block.text);
-                break;
-            case 'added':
-                if (decision === 'accept') {
-                    resultParts.push(block.newText);
-                }
-                // reject: skip this added text
-                break;
-            case 'deleted':
-                if (decision === 'accept') {
-                    // accept deletion → don't include
-                } else {
-                    // reject deletion → restore original text
-                    resultParts.push(block.oldText);
-                }
-                break;
-            case 'modified':
-                if (decision === 'accept') {
-                    resultParts.push(block.newText);
-                } else {
-                    resultParts.push(block.oldText);
-                }
-                break;
-        }
-    }
-
-    return resultParts.join('\n');
-}
-
-// ============================================================
 // 路由处理
 // ============================================================
 async function handleRequest(req, res) {
@@ -662,7 +474,6 @@ async function handleRequest(req, res) {
         jsonResponse(res, {
             use_mock_data: USE_MOCK_DATA || !SOCIALDATAX_API_KEY,
             has_api_key: !!SOCIALDATAX_API_KEY,
-            has_ai_key: !!AI_API_KEY,
             api_base: SOCIALDATAX_API_KEY ? SOCIALDATAX_MCP_URL : '(未配置)'
         });
         return;
@@ -713,67 +524,6 @@ async function handleRequest(req, res) {
         }
         if (!post) { jsonResponse(res, { error: '帖子不存在' }, 404); return; }
         jsonResponse(res, { post });
-        return;
-    }
-
-    // API: 仿写
-    if (method === 'POST' && parsedUrl === '/api/rewrite') {
-        const body = await parseBody(req);
-        const noteId = body.note_id || '';
-        const customTheme = body.custom_theme || '';
-        const similarity = Math.min(90, Math.max(10, parseInt(body.similarity) || 50));
-
-        if (!noteId) { jsonResponse(res, { error: '请提供帖子ID' }, 400); return; }
-
-        let sourcePost;
-        if (!USE_MOCK_DATA && SOCIALDATAX_API_KEY) {
-            try { sourcePost = await getRealPostDetail(noteId); }
-            catch (err) { console.log('  ⚠️ 获取原帖失败:', err.message); }
-        }
-        if (!sourcePost) {
-            sourcePost = MOCK_POSTS.find(p => p.note_id === noteId);
-        }
-        if (!sourcePost) { jsonResponse(res, { error: '帖子不存在' }, 404); return; }
-
-        // 尝试AI仿写，失败则回退到模板
-        let result;
-        if (AI_API_KEY) {
-            result = await aiRewrite(sourcePost, customTheme, similarity);
-        } else {
-            result = templateRewrite(sourcePost, customTheme, similarity);
-        }
-
-        // 计算文本差异
-        const diff = computeDiff(sourcePost.content, result.content);
-
-        jsonResponse(res, {
-            source_post: {
-                title: sourcePost.title,
-                content: sourcePost.content,
-                tags: sourcePost.tags,
-                likes: sourcePost.likes,
-                collects: sourcePost.collects,
-                comments: sourcePost.comments
-            },
-            rewritten: result,
-            diff: diff
-        });
-        return;
-    }
-
-    // API: 应用差异决策
-    if (method === 'POST' && parsedUrl === '/api/rewrite/adjust') {
-        const body = await parseBody(req);
-        const sourceContent = body.source_content || '';
-        const rewrittenContent = body.rewritten_content || '';
-        const decisions = body.decisions || {};
-
-        if (!sourceContent || !rewrittenContent) {
-            jsonResponse(res, { error: '请提供原帖内容和仿写内容' }, 400); return;
-        }
-
-        const adjusted = applyDiffDecisions(sourceContent, rewrittenContent, decisions);
-        jsonResponse(res, { content: adjusted });
         return;
     }
 
@@ -834,133 +584,13 @@ async function handleRequest(req, res) {
 }
 
 // ============================================================
-// AI仿写 - 多后端自动探测（Anthropic / OpenAI 兼容 / 自定义）
-// ============================================================
-function httpsRequest(url, options, body) {
-    return new Promise((resolve, reject) => {
-        const parsed = new URL(url);
-        const req = https.request({
-            hostname: parsed.hostname,
-            port: parsed.port || 443,
-            path: parsed.pathname + parsed.search,
-            method: options.method || 'POST',
-            headers: options.headers,
-            timeout: 30000
-        }, (res) => {
-            let data = '';
-            res.on('data', chunk => data += chunk);
-            res.on('end', () => {
-                try {
-                    resolve({ status: res.statusCode, body: JSON.parse(data) });
-                } catch {
-                    resolve({ status: res.statusCode, body: data });
-                }
-            });
-        });
-        req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
-        req.on('error', reject);
-        if (body) req.write(JSON.stringify(body));
-        req.end();
-    });
-}
-
-async function aiRewrite(sourcePost, customTheme, similarity = 50) {
-    // 根据相似度构建改写强度指令
-    let intensityPrompt;
-    if (similarity <= 30) {
-        intensityPrompt = `【改写强度：低相似度 ${similarity}%】大幅改写，仅保留核心主题思想。使用完全不同的表达方式、例证、具体细节和个人经历。结构也可以适当调整。`;
-    } else if (similarity <= 60) {
-        intensityPrompt = `【改写强度：中相似度 ${similarity}%】保持原帖的风格和基本结构，但替换具体内容、例证和细节。使用不同的措辞和表达方式。`;
-    } else {
-        intensityPrompt = `【改写强度：高相似度 ${similarity}%】保持原帖框架和主要观点，微调措辞和表达方式。保留核心结构和关键信息，替换少量细节和例证。`;
-    }
-
-    const systemPrompt = `你是一个专业的小红书内容创作助手。分析热门笔记的写作风格，然后创作主题相似但内容不同的全新笔记。
-要求：保持风格、结构、排版方式、emoji使用习惯、互动模式一致。生成3-5个新的话题标签。内容完全原创。
-${intensityPrompt}
-返回JSON格式：{"title":"...", "content":"...", "tags":["...", "..."], "style_analysis":"..."}`;
-
-    const userMessage = `【原帖标题】${sourcePost.title}\n【原帖正文】${sourcePost.content}\n【原帖标签】${sourcePost.tags.join(', ')}\n【互动数据】点赞:${sourcePost.likes} 收藏:${sourcePost.collects} 评论:${sourcePost.comments}${customTheme ? '\n【自定义主题】' + customTheme : ''}\n【目标相似度】${similarity}%\n\n请以JSON格式返回仿写结果。`;
-
-    // 根据相似度调整 temperature：低相似度更 creative，高相似度更 conservative
-    const temperature = similarity <= 30 ? 1.0 : (similarity <= 60 ? 0.8 : 0.6);
-
-    // --- 后端定义 ---
-    const backends = [];
-
-    // 如果指定了自定义 endpoint，优先使用
-    if (AI_API_BASE) {
-        backends.push({
-            name: 'custom',
-            url: AI_API_BASE.replace(/\/+$/, '') + '/v1/chat/completions',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${AI_API_KEY}` },
-            body: { model: 'gpt-3.5-turbo', max_tokens: 2048, temperature: temperature,
-                    messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userMessage }] },
-            parse: (data) => data.choices?.[0]?.message?.content
-        });
-    }
-
-    // Anthropic 官方 API
-    backends.push({
-        name: 'anthropic',
-        url: 'https://api.anthropic.com/v1/messages',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': AI_API_KEY, 'anthropic-version': '2023-06-01' },
-        body: { model: 'claude-sonnet-4-6', max_tokens: 2048, temperature: temperature,
-                system: systemPrompt, messages: [{ role: 'user', content: userMessage }] },
-        parse: (data) => data.content?.[0]?.text
-    });
-
-    // OpenAI 兼容 API (DeepSeek, OpenRouter, 国内代理等)
-    backends.push({
-        name: 'openai-compatible',
-        url: 'https://api.deepseek.com/v1/chat/completions',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${AI_API_KEY}` },
-        body: { model: 'deepseek-chat', max_tokens: 2048, temperature: temperature,
-                messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userMessage }] },
-        parse: (data) => data.choices?.[0]?.message?.content
-    });
-
-    // 逐一尝试后端
-    for (const backend of backends) {
-        try {
-            console.log(`  🤖 尝试 AI 后端: ${backend.name} (相似度:${similarity}%, temp:${temperature})...`);
-            const result = await httpsRequest(backend.url, { method: 'POST', headers: backend.headers }, backend.body);
-
-            if (result.status === 200 || result.status === 202) {
-                const text = backend.parse(result.body);
-                if (text) {
-                    const jsonStart = text.indexOf('{');
-                    const jsonEnd = text.lastIndexOf('}') + 1;
-                    if (jsonStart >= 0 && jsonEnd > jsonStart) {
-                        const parsed = JSON.parse(text.slice(jsonStart, jsonEnd));
-                        parsed.method = 'ai_powered';
-                        parsed.backend = backend.name;
-                        parsed.similarity = similarity;
-                        console.log(`  ✅ AI 仿写成功 (${backend.name})`);
-                        return parsed;
-                    }
-                }
-            }
-            console.log(`  ⚠️ ${backend.name}: HTTP ${result.status} - ${JSON.stringify(result.body).slice(0, 100)}`);
-        } catch (err) {
-            console.log(`  ❌ ${backend.name}: ${err.message}`);
-        }
-    }
-
-    // 所有后端都失败，回退到模板模式
-    console.log('  🔄 所有AI后端失败，回退到模板引擎');
-    return templateRewrite(sourcePost, customTheme, similarity);
-}
-
-// ============================================================
 // 启动服务器
 // ============================================================
 const server = http.createServer(handleRequest);
 server.listen(PORT, () => {
     console.log('='.repeat(60));
-    console.log('  🔥 小红书热门帖子查询 & AI仿写工具');
+    console.log('  🔥 小红书热门帖子查询工具');
     console.log('  📡 数据源: ' + ((SOCIALDATAX_API_KEY && !USE_MOCK_DATA) ? 'SocialDataX 真实API' : 'Mock模拟数据'));
-    console.log('  🤖 AI仿写: ' + (AI_API_KEY ? (AI_API_BASE ? AI_API_BASE : '多后端自动探测') : '模板引擎'));
     console.log(`  🌐 访问: http://localhost:${PORT}`);
     console.log('='.repeat(60));
     console.log('  按 Ctrl+C 停止服务器');
